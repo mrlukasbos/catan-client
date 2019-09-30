@@ -1,6 +1,5 @@
 use std::io::prelude::*;
 use bufstream::BufStream;
-
 use std::net::TcpStream;
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +10,7 @@ struct BuildCommand {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ServerResponse {
+struct ServerInput {
     model: String,
     attributes: serde_json::Value,
 }
@@ -19,6 +18,15 @@ struct ServerResponse {
 #[derive(Serialize, Deserialize)]
 struct ServerMessage {
     message: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ServerResponse {
+    code: usize,
+    title: String, 
+    description: String,
+    additional_info: String,
+    is_error: bool,
 }
 
 fn main() -> std::io::Result<()> {
@@ -30,38 +38,48 @@ fn main() -> std::io::Result<()> {
     buf_stream.flush()?;
     println!("Connected! Waiting for game to start...");
 
-    let build_village = BuildCommand {
-        structure: String::from("village"),
-        location: String::from("([1,2],[2,1],[2,2])"),
-    };
-
-    let build_street = BuildCommand {
-        structure: String::from("street"),
-        location: String::from("([1,2],[2,1])"),
-    };
-
-
     loop {
-        if let Some(response) = read_tcp_input(&mut buf_stream) {
+        if let Some(input) = read_tcp_input(&mut buf_stream) {
 
-            let response: ServerResponse = serde_json::from_str(&response)?; 
-            println!("response model {} ", response.model);
+            // get the input as ServerInput to extract the model type
+            let response: ServerInput = serde_json::from_str(&input)?; 
 
             // from the model we can derive the type of the attributes which we can put in the corresponding object. 
             match response.model.as_str() {
                 "board"  => {
-                    // send the command
-                    let commands = vec!(&build_village, &build_street);
-                    serde_json::to_writer(&stream, &commands)?;
-                    buf_stream.write(b"\r\n")?; // send a newline to indicate we are done
-                    buf_stream.flush()?;
 
-                    // show what we have` sent
-                    let output_string = serde_json::to_string(&commands)?;
-                    println!("Response sent: {}", &output_string);
                 },
                 "response" => {
-                    println!("Got a reponse");
+
+                    // extract the response data
+                    let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
+                    println!("response: {} {} {} {}", server_response.code, server_response.title, server_response.description, server_response.additional_info);
+
+                    if server_response.code == 102 {
+
+
+                        // create a dummy command
+                        let build_village = BuildCommand {
+                            structure: String::from("village"),
+                            location: String::from("([1,2],[2,1],[2,2])"),
+                        };
+
+                        let build_street = BuildCommand {
+                            structure: String::from("street"),
+                            location: String::from("([1,2],[2,1])"),
+                        };
+                        let commands = vec!(&build_village, &build_street);
+
+
+                        serde_json::to_writer(&stream, &commands)?;
+                        buf_stream.write(b"\r\n")?; // send a newline to indicate we are done
+                        buf_stream.flush()?;
+
+                        // show what we have sent
+                        let output_string = serde_json::to_string(&commands)?;
+                        println!("Response sent: {}", &output_string);
+
+                    }
                 },
                 _ => {
                     println!("Got something unknown");
@@ -71,7 +89,6 @@ fn main() -> std::io::Result<()> {
         }
     }
 } // the stream is closed here
-
 
 /// Reads the TCP input and extracts a json object from it.
 /// Returns Some(String) if the string is a properly formatted json object,
