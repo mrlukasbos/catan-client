@@ -1,8 +1,8 @@
 use std::io::prelude::*;
+use bufstream::BufStream;
+
 use std::net::TcpStream;
 use serde::{Deserialize, Serialize};
-use std::io::BufReader;
-use std::{thread, time};
 
 #[derive(Serialize, Deserialize)]
 struct BuildCommand {
@@ -23,8 +23,11 @@ struct ServerMessage {
 
 fn main() -> std::io::Result<()> {
 
-    let mut stream = TcpStream::connect("localhost:10006")?;
-    stream.write(b"Rust\r\n")?; // register as user Rust
+    let stream = TcpStream::connect("localhost:10006")?;
+    let mut buf_stream = BufStream::new(&stream);
+
+    buf_stream.write(b"Rust\r\n")?; // register as user Rust
+    buf_stream.flush()?;
     println!("Connected! Waiting for game to start...");
 
     let build_village = BuildCommand {
@@ -39,45 +42,45 @@ fn main() -> std::io::Result<()> {
 
 
     loop {
-        // Read a line and put it in the buffer
-        let mut reader = BufReader::new(&stream);
-        let mut buffer = String::new();
+        if let Some(response) = read_tcp_input(&mut buf_stream) {
 
-        if let Ok(_buffer_size) = reader.read_line(&mut buffer) {
-            if !buffer.is_empty() {
-                println!("{}", &buffer);
+            let response: ServerResponse = serde_json::from_str(&response)?; 
+            println!("response model {} ", response.model);
 
-                // parse the message we got
-                let start = buffer.find('{').unwrap_or_else(|| {
-                    buffer.len()
-                });
-
-                let model = &buffer[start..]; // slice the first two chars
-
-
-
-                let response: ServerResponse = serde_json::from_str(&model)?; 
-                print!("response model {} ", response.model);
-
-
-                // from the model we can derive the type of the attributes which we can put in the corresponding object. 
-
-                if response.model == "board" {
+            // from the model we can derive the type of the attributes which we can put in the corresponding object. 
+            match response.model.as_str() {
+                "board"  => {
                     // send the command
                     let commands = vec!(&build_village, &build_street);
                     serde_json::to_writer(&stream, &commands)?;
-                    stream.write(b"\r\n")?; // send a newline to indicate we are done
+                    buf_stream.write(b"\r\n")?; // send a newline to indicate we are done
+                    buf_stream.flush()?;
 
-                    // show what we have sent
+                    // show what we have` sent
                     let output_string = serde_json::to_string(&commands)?;
-                    print!("Response sent: {}", &output_string);
+                    println!("Response sent: {}", &output_string);
+                },
+                "response" => {
+                    println!("Got a reponse");
+                },
+                _ => {
+                    println!("Got something unknown");
+
                 }
-            }
+            };
         }
     }
 } // the stream is closed here
 
 
-// fn readTCPInput() {
-
-// }
+/// Reads the TCP input and extracts a json object from it.
+/// Returns Some(String) if the string is a properly formatted json object,
+/// otherwise returns None
+fn read_tcp_input(buf_stream: &mut BufStream<&TcpStream>) -> Option<String> {
+    let mut buffer = String::new();
+    if let Ok(_buffer_size) = buf_stream.read_line(&mut buffer) {
+        let model = String::from(&buffer[..]);
+        return Some(model)
+    }
+    None
+}
