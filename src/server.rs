@@ -13,7 +13,7 @@ pub struct ServerMessage {
 
 #[derive(Serialize, Deserialize)]
 pub struct ServerResponse {
-    pub code: usize,
+    pub code: i16,
     pub title: String,
     pub description: String,
     pub additional_info: String,

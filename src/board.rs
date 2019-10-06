@@ -2,10 +2,20 @@ use serde::{Deserialize, Serialize};
 use crate::server::ServerInput;
 
 #[derive(Serialize, Deserialize)]
+pub struct ServerInputBoard {
+    pub model: String,
+    pub attributes: Board,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Board {
-    pub bandits: Vec<ServerInput>,
+    #[serde(default)]
+    bandits: Vec<ServerInputBandit>,
+    #[serde(default)]
     tiles: Vec<ServerInputTile>,
+    #[serde(default)]
     nodes: Vec<ServerInputNode>,
+    #[serde(default)]
     edges: Vec<ServerInputEdge>,
 }
 
@@ -69,12 +79,30 @@ pub struct Edge {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct ServerInputPlayer {
+    pub model: String,
+    pub attributes: Player,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Player {
-    pub id: u32,
+    pub id: i32,
     pub color: String,
     pub name: String,
-//    resources: Vec<Resource>,
-//    development_cards: Vec<DevelopmentCard>,
+//    pub resources: Vec<String>,
+//    pub development_cards: Vec<String>,
+}
+
+impl Player {
+    pub fn is_me(&self) -> bool {
+        self.name == "Rust"
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ServerInputBandit{
+    pub model: String,
+    pub attributes: Bandit,
 }
 
 #[derive(Serialize, Deserialize)]
