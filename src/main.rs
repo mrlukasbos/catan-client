@@ -59,15 +59,17 @@ impl Game {
         }
     }
 
+    // return the players 
     fn get_players(&self) -> Vec<&Player> {
         self.players.iter().map(|player_model| {
             &player_model.attributes
         }).collect()
     }
 
-    // fn me(&self) -> Option<&Player> {
-    //     self.get_players().iter().filter(|p| { p.is_me()}).collect().get(0)
-    // }
+    // returns the player belonging to this codebase, if it exists in the data
+    fn me(&self) -> Option<&Player> {
+        self.get_players().into_iter().find(|p| { p.is_me() })
+    }
 }
 
 fn main() -> std::io::Result<()> {

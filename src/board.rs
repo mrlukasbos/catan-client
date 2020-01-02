@@ -94,7 +94,7 @@ pub struct Player {
 
 impl Player {
     pub fn is_me(&self) -> bool {
-        self.name == "Rust"
+        self.name == "Rust" // todo check this with the ID from the ID_acknowledgment
     }
 }
 
