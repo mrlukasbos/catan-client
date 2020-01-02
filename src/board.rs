@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use crate::server::ServerInput;
 
 #[derive(Serialize, Deserialize)]
 pub struct ServerInputBoard {

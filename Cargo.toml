@@ -1,5 +1,5 @@
 [package]
-name = "tcp_tester"
+name = "catan-client"
 version = "0.1.0"
 authors = ["mrlukasbos <mrlukasbos@gmail.com>"]
 edition = "2018"
@@ -7,4 +7,5 @@ edition = "2018"
 [dependencies]
 bufstream = "0.1"
 serde_json = "1.0"
+rand = "0.7.2"
 serde = { version = "1.0", features = ["derive"] }

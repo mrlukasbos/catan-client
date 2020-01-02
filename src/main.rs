@@ -2,6 +2,7 @@ use std::io::prelude::*;
 use bufstream::BufStream;
 use std::net::TcpStream;
 use serde::{Deserialize, Serialize};
+use rand::seq::SliceRandom;
 
 use crate::server::*;
 use crate::board::*;
@@ -13,6 +14,12 @@ mod server;
 struct BuildCommand {
     structure: String,
     location: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TradeCommand {
+    from: String,
+    to: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,6 +64,10 @@ impl Game {
             &player_model.attributes
         }).collect()
     }
+
+    // fn me(&self) -> Option<&Player> {
+    //     self.get_players().iter().filter(|p| { p.is_me()}).collect().get(0)
+    // }
 }
 
 fn main() -> std::io::Result<()> {
@@ -69,17 +80,23 @@ fn main() -> std::io::Result<()> {
 
     println!("Connected! Waiting for game to start...");
 
+
+    let mut game: Option<Game> = None;
     loop {
         if let Some(input) = read_tcp_input(&mut buf_stream) {
             let response: ServerInput = serde_json::from_str(&input)?;
 
             match response.model.as_str() {
                 "game"  => {
-                    let game: Game = serde_json::from_value(response.attributes)?;
+                    let val = serde_json::from_value(response.attributes)?;
+                    game = Some(val)
                 },
                 "response" => {
+                    println!("Received input: {}", &input);
                     let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
-                    handle_server_response(&stream, &mut buf_stream, server_response)
+                    if let Some(g) = &game {
+                         handle_server_response(&stream, &mut buf_stream, server_response, &g)
+                    }
                 },
                 _ => {
                     println!("Got something unknown");
@@ -89,32 +106,57 @@ fn main() -> std::io::Result<()> {
     }
 }
 
-fn handle_server_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, server_response: ServerResponse) -> () {
+fn handle_server_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, server_response: ServerResponse, game : &Game) -> () {
     match server_response.code {
+
+        // Got confirmation from the server that it was all OK
         0 => println!("Success!"),
+
+        // ID acknowledgement
         1 => {
             let id: i16 = server_response.additional_info.parse().unwrap_or(-1);
             println!("Our id is: {}", id)
         },
-        102 => send_dummy_command(&stream, &mut buf_stream).unwrap(),
+
+        // inital build request
+        102 => {
+            send_dummy_command(&stream, &mut buf_stream, game).unwrap();
+            // get a list of our villages
+        },
+
+        // regular build request
+        101 => send_dummy_command(&stream, &mut buf_stream, game).unwrap(),
+
+        // trade request
+        100 => {
+            let trade_commands: Vec<TradeCommand> = Vec::new();
+            transmit(&mut buf_stream, &stream, &trade_commands);
+        }
+
+
         _ => println!("We don't yet care about this: {}", server_response.code)
     }
 }
 
 /// Send a dummy command.
 /// This command will build a street and a village at a hardcoded location
-fn send_dummy_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>) -> Result<(), &'static str> {
+fn send_dummy_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
+
+    let board = game.get_board().unwrap();
+    let nodes = board.get_nodes();
+
+    let random_node = nodes.choose(&mut rand::thread_rng()).unwrap();
+
     let build_village = BuildCommand {
         structure: String::from("village"),
-        location: String::from("([1,2],[2,1],[2,2])"),
+        location: (*random_node).key.clone()
     };
     let build_street = BuildCommand {
         structure: String::from("street"),
-        location: String::from("([1,2],[2,1])"),
+        location: format!("({},{})", (*random_node).t_key.clone(), (*random_node).r_key.clone())
     };
     let commands = vec!(&build_village, &build_street);
-    transmit(&mut buf_stream, &stream, &commands);
-    Ok(())
+    transmit(&mut buf_stream, &stream, &commands)
 }
 
 /// Reads the TCP input and extracts a json object from it.
