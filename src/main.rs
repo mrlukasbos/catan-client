@@ -23,6 +23,11 @@ struct TradeCommand {
 }
 
 #[derive(Serialize, Deserialize)]
+struct MoveBanditCommand {
+    location: String
+}
+
+#[derive(Serialize, Deserialize)]
 struct ServerInputEvent {
     model: String,
     attributes: serde_json::Value,
@@ -133,6 +138,20 @@ fn handle_server_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&Tc
         100 => {
             let trade_commands: Vec<TradeCommand> = Vec::new();
             transmit(&mut buf_stream, &stream, &trade_commands);
+        },
+
+        103 => {
+
+            let board = game.get_board().unwrap();
+            let tiles = board.get_tiles();
+
+            let random_tile = tiles.choose(&mut rand::thread_rng()).unwrap();
+            let bandit_cmd = MoveBanditCommand {
+                location: random_tile.key.clone()
+            };
+
+            let bandit_commands: Vec<&MoveBanditCommand> = vec!(&bandit_cmd);
+            transmit(&mut buf_stream, &stream, &bandit_commands);
         }
 
 
@@ -146,6 +165,10 @@ fn send_dummy_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStr
 
     let board = game.get_board().unwrap();
     let nodes = board.get_nodes();
+
+    // let nodes_with_structure = nodes.into_iter().filter(|node| {
+    //     node.structure != "" 
+    // });
 
     let random_node = nodes.choose(&mut rand::thread_rng()).unwrap();
 
