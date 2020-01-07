@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use itertools::Itertools;
+use std::cmp::Ordering;
+use std::collections::HashMap;
+
 #[derive(Serialize, Deserialize)]
 pub struct ServerInputBoard {
     pub model: String,
@@ -56,7 +59,7 @@ impl Board {
         let tiles = self.get_tiles_surrounding_node(node);
         let mut options: Vec<Option<&Edge>> = Vec::new();
 
-        let permutations = (0..2).permutations(2);
+        let permutations = (0..=2).permutations(2);
         for permutation in permutations {
             let edge_key = format!("({},{})", tiles[permutation[0]].key, tiles[permutation[1]].key);
             options.push(self.get_edge_by_key(edge_key.as_str()));
@@ -80,6 +83,55 @@ impl Board {
             options.push(surrounding_node);
         }
         options.into_iter().flatten().collect()
+    }
+
+    pub fn get_nodes_from_player(&self, player: &Player) -> Vec<&Node> {
+        self.get_nodes().into_iter().filter(|node| {
+            if let Some(player_id) = node.player {
+                return player_id == player.id && node.structure != ""
+            }
+            false
+        }).collect()
+    }
+
+    pub fn get_cities_from_player(&self, player: &Player) -> Vec<&Node> {
+        let nodes = self.get_nodes_from_player(player);
+        nodes.into_iter().filter(|node| {
+            node.structure == "city"
+        }).collect()
+    }
+
+    pub fn get_villages_from_player(&self, player: &Player) -> Vec<&Node> {
+        let nodes = self.get_nodes_from_player(player);
+        nodes.into_iter().filter(|node| {
+            node.structure == "village"
+        }).collect()
+    }
+
+    pub fn get_edges_from_player(&self, player: &Player) -> Vec<&Edge> {
+        self.get_edges().into_iter().filter(|edge| {
+            edge.road // && edge.player.id == player.id
+        }).collect()
+    }
+
+    // get all edges where the player could try to build a street
+    pub fn get_potential_street_edges(&self, player: &Player) -> Vec<&Edge> {
+        let all_edges = self.get_edges();
+        let player_streets = self.get_edges_from_player(player);
+
+        println!("player_streets: {:?}", player_streets);
+
+        let nodes_connected_to_player_streets = player_streets.into_iter().map(|street| {
+            self.get_nodes_surrounding_edge(street)
+        }).concat();
+
+        println!("nodes_connected_to_player_streets size {}", nodes_connected_to_player_streets.len());
+
+        nodes_connected_to_player_streets.into_iter().map(|node| {
+            let edges = self.get_edges_surrounding_node(node);
+            println!("edges around node: {:?}", edges);
+            edges
+        }).concat().into_iter().sorted().dedup().collect()
     }
 }
 
@@ -109,7 +161,7 @@ pub struct ServerInputNode {
 pub struct Node {
     pub key: String,
     pub structure: String,
-    pub player: Option<u8>,
+    pub player: Option<usize>,
     pub t_key: String,
     pub r_key: String,
     pub l_key: String,
@@ -121,11 +173,17 @@ pub struct ServerInputEdge {
     pub attributes: Edge,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Debug)]
 pub struct Edge {
     pub key: String,
     pub player: Option<u8>,
     pub road: bool,
+}
+
+impl Ord for Edge {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.key.cmp(&other.key)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -136,11 +194,18 @@ pub struct ServerInputPlayer {
 
 #[derive(Serialize, Deserialize)]
 pub struct Player {
-    pub id: i32,
+    pub id: usize,
     pub color: String,
     pub name: String,
-//    pub resources: Vec<String>,
+    pub resources: Vec<Resource>,
 //    pub development_cards: Vec<String>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Resource {
+    pub r#type: String,
+    pub value: usize,
 }
 
 impl Player {
