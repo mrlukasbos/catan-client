@@ -170,7 +170,6 @@ pub struct Tile {
     pub key: String,
     pub resource_type: String,
     pub number: u32,
-    pub orientation: String,
     pub x: u8,
     pub y: u8,
 }
