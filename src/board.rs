@@ -131,10 +131,28 @@ impl Board {
 
         // filter out the streets that the player already owns
         edges_around_nodes.into_iter().filter(|e| {
-            if let Some(p) = e.player {
-                return p as usize != player.id 
-            } 
-            true
+            e.player.is_none()
+        }).collect()
+    }
+
+    pub fn get_potential_village_nodes(&self, player: &Player) -> Vec<&Node> { 
+        let mut all_villages_cities: Vec<&Node> = self.get_nodes().iter().cloned().filter(|n| {
+            n.player.is_some()
+        }).collect();
+
+        let illegal_empty_node_positions: Vec<&Node> = all_villages_cities.iter().cloned().map(|n| {
+            self.get_nodes_surrounding_node(n)
+        }).concat();
+
+        all_villages_cities.extend(&illegal_empty_node_positions);
+    
+        let player_streets = self.get_edges_from_player(player);
+        let nodes_connected_to_player_streets = player_streets.into_iter().map(|street| {
+            self.get_nodes_surrounding_edge(street)
+        }).concat();
+        
+        nodes_connected_to_player_streets.iter().cloned().filter(|n| {
+            !all_villages_cities.contains(n)    
         }).collect()
     }
 }
@@ -161,7 +179,7 @@ pub struct ServerInputNode {
     pub attributes: Node,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Node {
     pub key: String,
     pub structure: String,

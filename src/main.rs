@@ -134,7 +134,7 @@ fn handle_server_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&Tc
 fn send_trade_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
 
     let all_resources = vec!("ore", "grain", "wool", "wood", "stone");
-    let wanted_resources = vec!("wood", "stone");
+    let wanted_resources = vec!("wood", "stone", "grain", "wool");
 
     let random_trade = TradeCommand {
         from: String::from(all_resources.choose(&mut rand::thread_rng()).unwrap().clone()),
@@ -202,6 +202,21 @@ fn send_initial_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream
 
 fn send_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
     let board = game.get_board().unwrap();
+
+    println!("my resources are: {:?}", game.me().unwrap().resources);
+
+    let potential_villages = board.get_potential_village_nodes(game.me().unwrap());
+    println!("I have potential villages: {:?}", potential_villages);
+    if potential_villages.len() != 0 {
+        let random_village = potential_villages.choose(&mut rand::thread_rng()).unwrap();
+        let build_village = BuildCommand {
+            structure: String::from("village"),
+            location: (*random_village).key.clone()
+        };
+        let commands = vec!(&build_village);
+        return transmit(&mut buf_stream, &stream, &commands)
+    }
+
     let potential_streets = board.get_potential_street_edges(game.me().unwrap());
     println!("I have potential streets: {:?}", potential_streets);
     if potential_streets.len() == 0 {
