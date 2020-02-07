@@ -116,22 +116,26 @@ impl Board {
 
     // get all edges where the player could try to build a street
     pub fn get_potential_street_edges(&self, player: &Player) -> Vec<&Edge> {
-        let all_edges = self.get_edges();
         let player_streets = self.get_edges_from_player(player);
 
-        println!("player_streets: {:?}", player_streets);
-
+        // get the nodes around the players streets
         let nodes_connected_to_player_streets = player_streets.into_iter().map(|street| {
             self.get_nodes_surrounding_edge(street)
         }).concat();
 
-        println!("nodes_connected_to_player_streets size {}", nodes_connected_to_player_streets.len());
-
-        nodes_connected_to_player_streets.into_iter().map(|node| {
+        // get all edges surrounding the nodes to which the player has at least one edge
+        let edges_around_nodes: Vec<&Edge> = nodes_connected_to_player_streets.into_iter().map(|node| {
             let edges = self.get_edges_surrounding_node(node);
-            println!("edges around node: {:?}", edges);
             edges
-        }).concat().into_iter().sorted().dedup().collect()
+        }).concat().into_iter().sorted().dedup().collect();
+
+        // filter out the streets that the player already owns
+        edges_around_nodes.into_iter().filter(|e| {
+            if let Some(p) = e.player {
+                return p as usize != player.id 
+            } 
+            true
+        }).collect()
     }
 }
 

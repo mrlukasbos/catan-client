@@ -89,7 +89,7 @@ fn main() -> std::io::Result<()> {
                     game = Some(val)
                 },
                 "response" => {
-                    println!("Received input: {}", &input);
+                    // println!("Received input: {}", &input);
                     let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
                     if let Some(g) = &game {
                         handle_server_response(&stream, &mut buf_stream, server_response, &g)
@@ -127,7 +127,7 @@ fn handle_server_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&Tc
         Some(ResponseCode::MoveBanditRequest) => move_bandit_command(&stream, &mut buf_stream, game).unwrap(),
         Some(ResponseCode::ForceDiscardRequest) => send_force_discard_command(&stream, &mut buf_stream, game).unwrap(),
 
-        _ => println!("We don't yet care about this: {}", server_response.code)
+        _ => println!("Got error: {}", server_response.code)
     }
 }
 
@@ -159,8 +159,6 @@ fn send_force_discard_command(stream: &TcpStream, mut buf_stream: &mut BufStream
     my_resources_str.pop();
     my_resources_str.push_str("}]");
 
-
-    
     println!("I have to discard some resources. discarding: {:?}", my_resources_str);
     buf_stream.write(&my_resources_str.into_bytes()).unwrap(); // send a newline to indicate we are done
     buf_stream.write(b"\r\n").unwrap(); // send a newline to indicate we are done
@@ -182,7 +180,6 @@ fn move_bandit_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpSt
     transmit(&mut buf_stream, &stream, &bandit_commands)
 }
 
-/// This command will build a street and a village at a hardcoded location
 fn send_initial_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
     let board = game.get_board().unwrap();
     let nodes = board.get_nodes();
@@ -206,6 +203,11 @@ fn send_initial_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream
 fn send_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
     let board = game.get_board().unwrap();
     let potential_streets = board.get_potential_street_edges(game.me().unwrap());
+    println!("I have potential streets: {:?}", potential_streets);
+    if potential_streets.len() == 0 {
+        let commands: Vec<BuildCommand> = Vec::new();
+        return transmit(&mut buf_stream, &stream, &commands)
+    }
     let random_street = potential_streets.choose(&mut rand::thread_rng()).unwrap();
     let build_street = BuildCommand {
         structure: String::from("street"),
