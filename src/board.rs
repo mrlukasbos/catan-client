@@ -135,24 +135,26 @@ impl Board {
         }).collect()
     }
 
+    // get all nodes where the player can build a village
     pub fn get_potential_village_nodes(&self, player: &Player) -> Vec<&Node> { 
-        let mut all_villages_cities: Vec<&Node> = self.get_nodes().iter().cloned().filter(|n| {
+        // First we collect all positions where no one can build a village 
+        // Because there is already one or there is one next to the node.
+        let mut invalid_nodes: Vec<&Node> = self.get_nodes().iter().cloned().filter(|n| {
             n.player.is_some()
         }).collect();
-
-        let illegal_empty_node_positions: Vec<&Node> = all_villages_cities.iter().cloned().map(|n| {
+        let illegal_empty_node_positions: Vec<&Node> = invalid_nodes.iter().cloned().map(|n| {
             self.get_nodes_surrounding_node(n)
         }).concat();
-
-        all_villages_cities.extend(&illegal_empty_node_positions);
+        invalid_nodes.extend(&illegal_empty_node_positions);
     
+        // now all generic invalid nodes are known, get all nodes connected to an edge of the
+        // player, and subtract the invalid nodes from that.
         let player_streets = self.get_edges_from_player(player);
         let nodes_connected_to_player_streets = player_streets.into_iter().map(|street| {
             self.get_nodes_surrounding_edge(street)
         }).concat();
-        
         nodes_connected_to_player_streets.iter().cloned().filter(|n| {
-            !all_villages_cities.contains(n)    
+            !invalid_nodes.contains(n)    
         }).collect()
     }
 }
