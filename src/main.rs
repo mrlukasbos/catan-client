@@ -146,20 +146,7 @@ fn send_trade_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStr
 // Discards all resources.
 fn send_force_discard_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
     let me  = game.me().unwrap();
-    let mut my_resources_str: String = String::from("[{");
-    for resource in &me.resources {
-        let partial = format!("\"{}\":{},", resource.r#type.to_lowercase(), resource.value);
-        my_resources_str.push_str(&partial[..]);
-    }
-
-    my_resources_str.pop();
-    my_resources_str.push_str("}]");
-
-    println!("I have to discard some resources. discarding: {:?}", my_resources_str);
-    buf_stream.write(&my_resources_str.into_bytes()).unwrap(); // send a newline to indicate we are done
-    buf_stream.write(b"\r\n").unwrap(); // send a newline to indicate we are done
-    buf_stream.flush().unwrap();
-    Ok(())
+    transmit(&mut buf_stream, &stream, & me.resources)
 }
 
 // Send a command that response to a MoveBanditRequest
