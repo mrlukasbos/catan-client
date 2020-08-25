@@ -70,8 +70,10 @@ impl Game {
 
 fn main() -> std::io::Result<()> {
 
+    let mut stream;
+
     loop {
-        let stream = TcpStream::connect("localhost:10006")?;
+        stream = TcpStream::connect("localhost:10006")?;
         let mut buf_stream = BufStream::new(&stream);
 
         let names = vec!("Luke Skywalker", "Darth Vader", "Yoda", "Obi-Wan Kenobi", "Han Solo", "Leia Skywalker", "Anakin Skywalker", "Mace Windu");
@@ -84,11 +86,18 @@ fn main() -> std::io::Result<()> {
         println!("Connected as {}Waiting for game to start...", name);
         let mut game: Option<Game> = None;
         loop {
+
+            // limit speed of rust
+            let sleep_time = time::Duration::from_millis(1000);
+            thread::sleep(sleep_time);
+
             if let Some(input) = read_tcp_input(&mut buf_stream) {
             
                 let response: ServerInput  = match serde_json::from_str(&input) {
                     Ok(response)  => response,
-                    Err(_) => break,
+                    Err(_) => {
+                        break;
+                    },
                 };
 
                 match response.model.as_str() {
@@ -100,8 +109,6 @@ fn main() -> std::io::Result<()> {
                         // println!("Received input: {}", &input);
                         let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
                         if let Some(g) = &game {
-                            let sleep_time = time::Duration::from_millis(500);
-                            thread::sleep(sleep_time);
                             handle_server_response(&stream, &mut buf_stream, server_response, &g)
                         }
                     },
