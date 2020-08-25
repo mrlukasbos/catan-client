@@ -91,11 +91,9 @@ fn main() -> std::io::Result<()> {
                     // println!("Received input: {}", &input);
                     let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
                     if let Some(g) = &game {
-                        let sleep_time = time::Duration::from_millis(100);
+                        let sleep_time = time::Duration::from_millis(500);
                         thread::sleep(sleep_time);
                         handle_server_response(&stream, &mut buf_stream, server_response, &g)
-                      
-
                     }
                 },
                 _ => {
