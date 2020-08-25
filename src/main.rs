@@ -69,37 +69,47 @@ impl Game {
 }
 
 fn main() -> std::io::Result<()> {
-    let stream = TcpStream::connect("localhost:10006")?;
-    let mut buf_stream = BufStream::new(&stream);
 
-    // connect as user 'Rust';
-    buf_stream.write(b"Rust\r\n").unwrap();
-    buf_stream.flush().unwrap();
-
-    println!("Connected! Waiting for game to start...");
-    let mut game: Option<Game> = None;
     loop {
-        if let Some(input) = read_tcp_input(&mut buf_stream) {
-            let response: ServerInput = serde_json::from_str(&input)?;
+        let stream = TcpStream::connect("localhost:10006")?;
+        let mut buf_stream = BufStream::new(&stream);
 
-            match response.model.as_str() {
-                "game"  => {
-                    let val = serde_json::from_value(response.attributes)?;
-                    game = Some(val)
-                },
-                "response" => {
-                    // println!("Received input: {}", &input);
-                    let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
-                    if let Some(g) = &game {
-                        let sleep_time = time::Duration::from_millis(500);
-                        thread::sleep(sleep_time);
-                        handle_server_response(&stream, &mut buf_stream, server_response, &g)
+        let names = vec!("Luke Skywalker", "Darth Vader", "Yoda", "Obi-Wan Kenobi", "Han Solo", "Leia Skywalker", "Anakin Skywalker", "Mace Windu");
+        let name = String::from(names.choose(&mut rand::thread_rng()).unwrap().clone()) + "\r\n";
+
+        // connect as user with random name
+        buf_stream.write(name.as_bytes()).unwrap();
+        buf_stream.flush().unwrap();
+
+        println!("Connected as {}Waiting for game to start...", name);
+        let mut game: Option<Game> = None;
+        loop {
+            if let Some(input) = read_tcp_input(&mut buf_stream) {
+            
+                let response: ServerInput  = match serde_json::from_str(&input) {
+                    Ok(response)  => response,
+                    Err(_) => break,
+                };
+
+                match response.model.as_str() {
+                    "game"  => {
+                        let val = serde_json::from_value(response.attributes)?;
+                        game = Some(val)
+                    },
+                    "response" => {
+                        // println!("Received input: {}", &input);
+                        let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
+                        if let Some(g) = &game {
+                            let sleep_time = time::Duration::from_millis(500);
+                            thread::sleep(sleep_time);
+                            handle_server_response(&stream, &mut buf_stream, server_response, &g)
+                        }
+                    },
+                    _ => {
+                        println!("Got something unknown");
                     }
-                },
-                _ => {
-                    println!("Got something unknown");
-                }
-            };
+                };
+            }
         }
     }
 }
@@ -233,8 +243,8 @@ fn read_tcp_input(buf_stream: &mut BufStream<&TcpStream>) -> Option<String> {
 
 // Transmit a JSON object over the TCP connection and append a newline
 fn transmit<T: ?Sized>(buf_stream: &mut BufStream<&TcpStream>, stream: &TcpStream, value: &T) -> Result<(), &'static str> where T: Serialize {
-    serde_json::to_writer(stream, value).unwrap();
-    buf_stream.write(b"\r\n").unwrap(); // send a newline to indicate we are done
-    buf_stream.flush().unwrap();
+    serde_json::to_writer(stream, value).unwrap_or_default();
+    buf_stream.write(b"\r\n").unwrap_or_default(); // send a newline to indicate we are done
+    buf_stream.flush().unwrap_or_default();
     Ok(())
 }
