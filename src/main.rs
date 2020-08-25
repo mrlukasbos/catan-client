@@ -88,7 +88,7 @@ fn main() -> std::io::Result<()> {
         loop {
 
             // limit speed of rust
-            let sleep_time = time::Duration::from_millis(4000);
+            let sleep_time = time::Duration::from_millis(100);
             thread::sleep(sleep_time);
 
             if let Some(input) = read_tcp_input(&mut buf_stream) {
