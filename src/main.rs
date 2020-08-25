@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
 use num_derive::FromPrimitive;    
 use num_traits::FromPrimitive;
+use std::{thread, time};
 
 use crate::server::*;
 use crate::board::*;
@@ -36,7 +37,7 @@ struct Game {
     players: Vec<ServerInputPlayer>,
     status: String,
     board: Option<ServerInputBoard>,
-    events: Vec<ServerInputEvent>,
+    events: Option<Vec<ServerInputEvent>>,
     last_dice_throw: Option<u8>,
     phase: Option<String>,
     current_player: Option<u8>
@@ -90,7 +91,11 @@ fn main() -> std::io::Result<()> {
                     // println!("Received input: {}", &input);
                     let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
                     if let Some(g) = &game {
+                        let sleep_time = time::Duration::from_millis(100);
+                        thread::sleep(sleep_time);
                         handle_server_response(&stream, &mut buf_stream, server_response, &g)
+                      
+
                     }
                 },
                 _ => {
