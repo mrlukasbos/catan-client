@@ -215,7 +215,7 @@ pub struct ServerInputPlayer {
     pub attributes: Player,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Player {
     pub id: usize,
     pub color: String,
@@ -229,12 +229,6 @@ pub struct Player {
 pub struct Resource {
     pub r#type: String,
     pub value: usize,
-}
-
-impl Player {
-    pub fn is_me(&self) -> bool {
-        self.name == "Rust" // todo check this with the ID from the ID_acknowledgment
-    }
 }
 
 #[derive(Serialize, Deserialize)]

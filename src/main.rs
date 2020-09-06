@@ -40,7 +40,10 @@ struct Game {
     events: Option<Vec<ServerInputEvent>>,
     last_dice_throw: Option<u8>,
     phase: Option<String>,
-    current_player: Option<u8>
+    current_player: Option<u8>,
+
+    #[serde(skip)] 
+    my_id: i16,
 }
 
 impl Game {
@@ -52,6 +55,10 @@ impl Game {
         }
     }
 
+    fn set_my_id(&mut self, id: i16) {
+        self.my_id = id;
+    }
+
     fn get_players(&self) -> Vec<&Player> {
         self.players.iter().map(|player_model| {
             &player_model.attributes
@@ -60,7 +67,7 @@ impl Game {
 
     // returns the player belonging to this codebase, if it exists in the data
     fn me(&self) -> Option<&Player> {
-        self.get_players().into_iter().find(|p| { p.is_me() })
+        self.get_player_by_id(self.my_id as usize)
     }
 
     fn get_player_by_id(&self, id: usize) -> Option<&Player> {
@@ -71,6 +78,7 @@ impl Game {
 fn main() -> std::io::Result<()> {
 
     let mut stream;
+    let mut my_id = -1;
 
     loop {
         stream = TcpStream::connect("localhost:10006")?;
@@ -83,7 +91,7 @@ fn main() -> std::io::Result<()> {
         buf_stream.write(name.as_bytes()).unwrap();
         buf_stream.flush().unwrap();
 
-        println!("Connected as {}Waiting for game to start...", name);
+        println!("Connected as {}. Waiting for game to start...", name);
         let mut game: Option<Game> = None;
         loop {
 
@@ -102,14 +110,18 @@ fn main() -> std::io::Result<()> {
 
                 match response.model.as_str() {
                     "game"  => {
-                        let val = serde_json::from_value(response.attributes)?;
-                        game = Some(val)
+                        let val: Game = serde_json::from_value(response.attributes)?;
+                        println!("players size: {}", &val.get_players().len());
+                        game = Some(val);
+                        if let Some(g) = &mut game {
+                            g.set_my_id(my_id);
+                        }
                     },
                     "response" => {
                         // println!("Received input: {}", &input);
                         let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
                         if let Some(g) = &game {
-                            handle_server_response(&stream, &mut buf_stream, server_response, &g)
+                            handle_server_response(&mut my_id, &stream, &mut buf_stream, server_response, &g)
                         }
                     },
                     _ => {
@@ -133,12 +145,13 @@ enum ResponseCode {
 }
 
 // Handles a server response with either a print statement in the console or a transmission back. 
-fn handle_server_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, server_response: ServerResponse, game : &Game) -> () {
+fn handle_server_response(my_id: &mut i16, stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, server_response: ServerResponse, game : &Game) -> () {
+
     match FromPrimitive::from_i16(server_response.code) {
         Some(ResponseCode::Ok) => println!("Success!"),
         Some(ResponseCode::IdAcknowledgment) => {
             let id: i16 = server_response.additional_info.parse().unwrap_or(-1);
-            println!("Our id is: {}", id)
+            *my_id = id;
         },
         Some(ResponseCode::TradeRequest) => send_trade_command(&stream, &mut buf_stream, game).unwrap(),
         Some(ResponseCode::BuildRequest) => send_build_command(&stream, &mut buf_stream, game).unwrap(),
@@ -208,7 +221,16 @@ fn send_initial_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream
 fn send_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
     let board = game.get_board().unwrap();
 
-    println!("my resources are: {:?}", game.me().unwrap().resources);
+    let me = match game.me() {
+        Some(me) => me,
+        None => {
+            println!("game: {:?}", game.get_players());
+            return Err("me() does not exist at this point?")
+        }
+    };
+
+    println!("I have resources: {:?}", me.resources);
+
 
     let potential_villages = board.get_potential_village_nodes(game.me().unwrap());
     println!("I have potential villages: {:?}", potential_villages);
