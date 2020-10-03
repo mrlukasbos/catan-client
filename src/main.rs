@@ -84,12 +84,17 @@ fn main() -> std::io::Result<()> {
         stream = TcpStream::connect("localhost:10006")?;
         let mut buf_stream = BufStream::new(&stream);
 
-        let names = vec!("Luke Skywalker", "Darth Vader", "Yoda", "Obi-Wan Kenobi", "Han Solo", "Leia Skywalker", "Anakin Skywalker", "Mace Windu");
-        let name = String::from(names.choose(&mut rand::thread_rng()).unwrap().clone()) + "\r\n";
+        let name = String::from("Luke Skywalker");
 
-        // connect as user with random name
-        buf_stream.write(name.as_bytes()).unwrap();
-        buf_stream.flush().unwrap();
+        let join = JoinMessage {
+            id: -1,
+            name: name.clone(),
+        };
+        let mut join_message = ServerInput {
+            model: String::from("join"),
+            attributes: serde_json::to_value(join)?
+        };
+        transmit(&mut buf_stream, &stream, &join_message);
 
         println!("Connected as {}. Waiting for game to start...", name);
         let mut game: Option<Game> = None;
@@ -104,21 +109,21 @@ fn main() -> std::io::Result<()> {
                 let response: ServerInput  = match serde_json::from_str(&input) {
                     Ok(response)  => response,
                     Err(_) => {
-                        break;
+                        print!("something went wrong with reading input: {}", &input );
+                        continue;
                     },
                 };
 
                 match response.model.as_str() {
                     "game"  => {
                         let val: Game = serde_json::from_value(response.attributes)?;
-                        println!("players size: {}", &val.get_players().len());
                         game = Some(val);
                         if let Some(g) = &mut game {
                             g.set_my_id(my_id);
                         }
                     },
                     "response" => {
-                        // println!("Received input: {}", &input);
+                        println!("Received input: {}", &input);
                         let server_response: ServerResponse = serde_json::from_value(response.attributes)?;
                         if let Some(g) = &game {
                             handle_server_response(&mut my_id, &stream, &mut buf_stream, server_response, &g)
@@ -159,8 +164,20 @@ fn handle_server_response(my_id: &mut i16, stream: &TcpStream, mut buf_stream: &
         Some(ResponseCode::MoveBanditRequest) => move_bandit_command(&stream, &mut buf_stream, game).unwrap(),
         Some(ResponseCode::ForceDiscardRequest) => send_force_discard_command(&stream, &mut buf_stream, game).unwrap(),
 
-        _ => println!("Got error: {}", server_response.code)
+        _ => println!("Got error: {}, {}, {}", server_response.code, server_response.title, server_response.description)
     }
+}
+
+
+fn send_client_response(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, response_data: serde_json::Value) -> Result<(), &'static str> {
+    let response = ClientResponse {
+        response: response_data
+    };
+    let mut client_response = ServerInput {
+        model: String::from("client-response"),
+        attributes: serde_json::to_value(response).unwrap()
+    };
+    transmit(&mut buf_stream, &stream, &client_response)
 }
 
 // Send a command that responds to a TradeRequest
@@ -172,14 +189,14 @@ fn send_trade_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStr
         to: String::from(wanted_resources.choose(&mut rand::thread_rng()).unwrap().clone()),
     };
     let trade_commands : Vec<&TradeCommand> = vec!(&random_trade);
-    transmit(&mut buf_stream, &stream, &trade_commands)
+    send_client_response(&stream, &mut buf_stream, serde_json::to_value(trade_commands).unwrap())
 }
 
 // Send a command that responds to a ForceDiscardRequest
 // Discards all resources.
 fn send_force_discard_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStream>, game: &Game) -> Result<(), &'static str> {
     let me  = game.me().unwrap();
-    transmit(&mut buf_stream, &stream, & me.resources)
+    send_client_response(&stream, &mut buf_stream, serde_json::to_value(&me.resources).unwrap())
 }
 
 // Send a command that response to a MoveBanditRequest
@@ -192,7 +209,7 @@ fn move_bandit_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpSt
         location: random_tile.key.clone()
     };
     let bandit_commands: Vec<&MoveBanditCommand> = vec!(&bandit_cmd);
-    transmit(&mut buf_stream, &stream, &bandit_commands)
+    send_client_response(&stream, &mut buf_stream, serde_json::to_value(bandit_commands).unwrap())
 }
 
 // send a command that responds to a InitialBuildRequest
@@ -212,7 +229,8 @@ fn send_initial_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream
         location: (*random_street).key.clone()
     };
     let commands = vec!(&build_village, &build_street);
-    transmit(&mut buf_stream, &stream, &commands)
+
+    send_client_response(&stream, &mut buf_stream, serde_json::to_value(commands).unwrap())
 }
 
 // Send a build command that responds to BuildRequest.
@@ -241,14 +259,14 @@ fn send_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStr
             location: (*random_village).key.clone()
         };
         let commands = vec!(&build_village);
-        return transmit(&mut buf_stream, &stream, &commands)
+        return send_client_response(&stream, &mut buf_stream, serde_json::to_value(commands).unwrap())
     }
 
     let potential_streets = board.get_potential_street_edges(game.me().unwrap());
     println!("I have potential streets: {:?}", potential_streets);
     if potential_streets.len() == 0 {
         let commands: Vec<BuildCommand> = Vec::new();
-        return transmit(&mut buf_stream, &stream, &commands)
+        return send_client_response(&stream, &mut buf_stream, serde_json::to_value(commands).unwrap())
     }
     let random_street = potential_streets.choose(&mut rand::thread_rng()).unwrap();
     let build_street = BuildCommand {
@@ -256,7 +274,7 @@ fn send_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStr
         location: (*random_street).key.clone()
     };
     let commands = vec!(&build_street);
-    transmit(&mut buf_stream, &stream, &commands)
+    send_client_response(&stream, &mut buf_stream, serde_json::to_value(commands).unwrap())
 }
 
 // Reads the TCP input and extracts a json object from it.
@@ -264,8 +282,11 @@ fn send_build_command(stream: &TcpStream, mut buf_stream: &mut BufStream<&TcpStr
 // otherwise returns None
 fn read_tcp_input(buf_stream: &mut BufStream<&TcpStream>) -> Option<String> {
     let mut buffer = String::new();
-    if let Ok(_buffer_size) = buf_stream.read_line(&mut buffer) {
-        return Some(buffer)
+
+    loop {
+        if let Ok(_buffer_size) = buf_stream.read_line(&mut buffer) {
+            return Some(buffer)
+        }
     }
     None
 }
@@ -273,6 +294,7 @@ fn read_tcp_input(buf_stream: &mut BufStream<&TcpStream>) -> Option<String> {
 // Transmit a JSON object over the TCP connection and append a newline
 fn transmit<T: ?Sized>(buf_stream: &mut BufStream<&TcpStream>, stream: &TcpStream, value: &T) -> Result<(), &'static str> where T: Serialize {
     serde_json::to_writer(stream, value).unwrap_or_default();
+    println!("transmiting: {}", serde_json::to_string_pretty(value).unwrap_or_default());
     buf_stream.write(b"\r\n").unwrap_or_default(); // send a newline to indicate we are done
     buf_stream.flush().unwrap_or_default();
     Ok(())

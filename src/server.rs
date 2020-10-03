@@ -19,3 +19,14 @@ pub struct ServerResponse {
     pub additional_info: String,
     pub is_error: bool,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct JoinMessage {
+    pub id: i16,
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ClientResponse {
+    pub response: serde_json::Value
+}
